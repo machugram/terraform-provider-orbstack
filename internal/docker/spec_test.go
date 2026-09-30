@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestBuildSpec(t *testing.T) {
 
 	var found bool
 	for port, bindings := range spec.HostConfig.PortBindings {
-		if port.Num() == 80 && len(bindings) == 1 && bindings[0].HostPort == "8080" && bindings[0].HostIP.String() == "0.0.0.0" {
+		if port.Num() == 80 && len(bindings) == 1 && bindings[0].HostPort == "8080" && bindings[0].HostIP.String() == "127.0.0.1" {
 			found = true
 		}
 	}
@@ -79,6 +80,42 @@ func TestBuildSpecRejectsRelativeVolume(t *testing.T) {
 		Volumes: map[string]string{"site": "/usr/share/nginx/html"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuildSpecBindAddress(t *testing.T) {
+	spec, err := BuildSpec(SpecInput{
+		Image:       "nginx:latest",
+		BindAddress: "0.0.0.0",
+		Ports:       map[string]string{"8080": "80"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bindings := range spec.HostConfig.PortBindings {
+		if len(bindings) != 1 || bindings[0].HostIP.String() != "0.0.0.0" {
+			t.Fatalf("bindings = %#v", bindings)
+		}
+	}
+	if _, err := BuildSpec(SpecInput{Image: "nginx:latest", BindAddress: "everywhere"}); err == nil || !strings.Contains(err.Error(), "bind_address") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuildSpecRejectsVolumeOption(t *testing.T) {
+	_, err := BuildSpec(SpecInput{
+		Image:   "nginx:latest",
+		Volumes: map[string]string{"/tmp/site": "/data:ro"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must not contain ':'") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRedactEnv(t *testing.T) {
+	err := redactEnv(errors.New("create failed: hunter2"), map[string]string{"SECRET": "hunter2"})
+	if err == nil || strings.Contains(err.Error(), "hunter2") || !strings.Contains(err.Error(), "[redacted]") {
 		t.Fatalf("err = %v", err)
 	}
 }

@@ -49,7 +49,7 @@ resource "orbstack_machine" "dev" {
 
 `image` defaults to `ubuntu`. Use `distro` or `distro:version`. `power_state` defaults to `running`. `default_machine` defaults to false.
 
-Changing `image`, `arch`, `username`, `cloud_init`, `cloud_init_file`, `isolated`, `isolate_network`, or `mounts` replaces the machine. `cloud_init` and `cloud_init_file` cannot both be set. `mounts` entries are `SOURCE` or `SOURCE:DEST`, and they require `isolated = true`.
+Changing `image`, `arch`, `username`, `cloud_init`, `cloud_init_file`, `isolated`, `isolate_network`, or `mounts` replaces the machine. `cloud_init` is not stored in state. `cloud_init` and `cloud_init_file` cannot both be set. `name` and `image` must not start with `-`. `mounts` entries are `SOURCE` or `SOURCE:DEST`, and they require `isolated = true`.
 
 `name` renames in place. The Terraform id stays the OrbStack ULID. `cpus`, `memory_mib`, and `disk_gib` update in place. A running machine is restarted so the new limit applies. Omit a limit to leave it unlimited. OrbStack reports unlimited as `0`; state stores that as null.
 
@@ -88,7 +88,7 @@ resource "orbstack_container" "web" {
 }
 ```
 
-`ports` and `volumes` are maps from host to container. Ports are integers from 1 to 65535, TCP, published on `0.0.0.0`. Volume host paths must be absolute. Mounts are read-write binds. `env` is a name-to-value map. An empty map and null are the same. Errors from the provider do not print environment values.
+`ports` and `volumes` are maps from host to container. Ports are integers from 1 to 65535, TCP, published on `bind_address` (`127.0.0.1` unless set). Volume host and container paths must be absolute and must not contain `:`. Mounts are read-write binds. `env` is a name-to-value map and is not stored in state. An empty map and null are the same. Errors from the provider do not print environment values.
 
 `restart` defaults to `unless-stopped` (`no`, `on-failure`, `always`, `unless-stopped`). `running` defaults to true. Stop waits 10 seconds. Only `restart` and `running` update in place.
 

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -40,19 +41,20 @@ type containerResource struct {
 }
 
 type containerModel struct {
-	ID        types.String  `tfsdk:"id"`
-	Name      types.String  `tfsdk:"name"`
-	Image     types.String  `tfsdk:"image"`
-	Ports     types.Map     `tfsdk:"ports"`
-	Env       types.Map     `tfsdk:"env"`
-	Volumes   types.Map     `tfsdk:"volumes"`
-	Command   types.List    `tfsdk:"command"`
-	Workdir   types.String  `tfsdk:"workdir"`
-	CPUs      types.Float64 `tfsdk:"cpus"`
-	MemoryMiB types.Int64   `tfsdk:"memory_mib"`
-	Restart   types.String  `tfsdk:"restart"`
-	Running   types.Bool    `tfsdk:"running"`
-	ImageID   types.String  `tfsdk:"image_id"`
+	ID          types.String  `tfsdk:"id"`
+	Name        types.String  `tfsdk:"name"`
+	Image       types.String  `tfsdk:"image"`
+	Ports       types.Map     `tfsdk:"ports"`
+	BindAddress types.String  `tfsdk:"bind_address"`
+	Env         types.Map     `tfsdk:"env"`
+	Volumes     types.Map     `tfsdk:"volumes"`
+	Command     types.List    `tfsdk:"command"`
+	Workdir     types.String  `tfsdk:"workdir"`
+	CPUs        types.Float64 `tfsdk:"cpus"`
+	MemoryMiB   types.Int64   `tfsdk:"memory_mib"`
+	Restart     types.String  `tfsdk:"restart"`
+	Running     types.Bool    `tfsdk:"running"`
+	ImageID     types.String  `tfsdk:"image_id"`
 }
 
 func (r *containerResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -87,18 +89,26 @@ func (r *containerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"ports": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Host port to container port. TCP, published on 0.0.0.0.",
+				Description: "Host port to container port. TCP, published on bind_address.",
 				PlanModifiers: []planmodifier.Map{
 					mapplanmodifier.RequiresReplace(),
+				},
+			},
+			"bind_address": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("127.0.0.1"),
+				Description: "IP address published ports bind to. Defaults to 127.0.0.1. Use 0.0.0.0 to listen on all interfaces.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"env": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Environment variables. Empty and null are the same.",
-				PlanModifiers: []planmodifier.Map{
-					mapplanmodifier.RequiresReplace(),
-				},
+				Sensitive:   true,
+				WriteOnly:   true,
+				Description: "Environment variables. Not stored in state. Empty and null are the same.",
 			},
 			"volumes": schema.MapAttribute{
 				ElementType: types.StringType,
@@ -172,7 +182,7 @@ func (r *containerResource) Configure(_ context.Context, req resource.ConfigureR
 func (r *containerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var model containerModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &model)...)
-	if resp.Diagnostics.HasError() || model.Ports.IsUnknown() || model.Env.IsUnknown() || model.Volumes.IsUnknown() || model.Command.IsUnknown() {
+	if resp.Diagnostics.HasError() || model.Ports.IsUnknown() || model.Env.IsUnknown() || model.Volumes.IsUnknown() || model.Command.IsUnknown() || model.BindAddress.IsUnknown() {
 		return
 	}
 	request, diags := containerRequest(ctx, model)
@@ -181,7 +191,14 @@ func (r *containerResource) ValidateConfig(ctx context.Context, req resource.Val
 		return
 	}
 	if _, err := docker.SpecFromRequest(request); err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("ports"), "invalid container", err.Error())
+		attr := path.Root("ports")
+		switch {
+		case strings.Contains(err.Error(), "bind_address"):
+			attr = path.Root("bind_address")
+		case strings.Contains(err.Error(), "volume"):
+			attr = path.Root("volumes")
+		}
+		resp.Diagnostics.AddAttributeError(attr, "invalid container", err.Error())
 	}
 }
 
@@ -191,20 +208,38 @@ func (r *containerResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 	}
 	var plan containerModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	if resp.Diagnostics.HasError() || plan.Env.IsNull() || plan.Env.IsUnknown() {
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if len(plan.Env.Elements()) == 0 {
+	if !plan.Env.IsUnknown() && !plan.Env.IsNull() && len(plan.Env.Elements()) == 0 {
 		plan.Env = types.MapNull(types.StringType)
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 	}
+
+	var config containerModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() || config.Env.IsUnknown() {
+		return
+	}
+	env, diags := mapStrings(ctx, config.Env)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	replace, diags := replaceIfSecretChanged(ctx, req.State.Raw.IsNull(), req.Private, resp.Private, "env_hash", hashEnv(env), path.Root("env"))
+	resp.Diagnostics.Append(diags...)
+	resp.RequiresReplace = append(resp.RequiresReplace, replace...)
 }
 
 func (r *containerResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan containerModel
+	var plan, config containerModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if !config.Env.IsUnknown() {
+		plan.Env = config.Env
 	}
 	request, diags := containerRequest(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -338,17 +373,18 @@ func containerRequest(ctx context.Context, model containerModel) (docker.Contain
 		running = model.Running.ValueBool()
 	}
 	return docker.ContainerRequest{
-		Name:      stringVal(model.Name),
-		Image:     stringVal(model.Image),
-		Ports:     ports,
-		Env:       env,
-		Volumes:   volumes,
-		Command:   command,
-		Workdir:   stringVal(model.Workdir),
-		CPUs:      floatPtr(model.CPUs),
-		MemoryMiB: intPtr(model.MemoryMiB),
-		Restart:   stringVal(model.Restart),
-		Running:   running,
+		Name:        stringVal(model.Name),
+		Image:       stringVal(model.Image),
+		BindAddress: stringVal(model.BindAddress),
+		Ports:       ports,
+		Env:         env,
+		Volumes:     volumes,
+		Command:     command,
+		Workdir:     stringVal(model.Workdir),
+		CPUs:        floatPtr(model.CPUs),
+		MemoryMiB:   intPtr(model.MemoryMiB),
+		Restart:     stringVal(model.Restart),
+		Running:     running,
 	}, diags
 }
 
@@ -383,9 +419,9 @@ func containerModelFrom(prior containerModel, container docker.Container, fillId
 		if container.ImageRef != "" {
 			model.Image = types.StringValue(container.ImageRef)
 		}
-		model.Env = types.MapNull(types.StringType)
 		model.Command = types.ListNull(types.StringType)
 		model.Workdir = types.StringNull()
 	}
+	model.Env = types.MapNull(types.StringType)
 	return model
 }

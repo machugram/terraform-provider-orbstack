@@ -16,15 +16,16 @@ import (
 
 // SpecInput is the container configuration supplied by Terraform.
 type SpecInput struct {
-	Image     string
-	Ports     map[string]string
-	Env       map[string]string
-	Volumes   map[string]string
-	Command   []string
-	Workdir   string
-	CPUs      *float64
-	MemoryMiB *int64
-	Restart   string
+	Image       string
+	BindAddress string
+	Ports       map[string]string
+	Env         map[string]string
+	Volumes     map[string]string
+	Command     []string
+	Workdir     string
+	CPUs        *float64
+	MemoryMiB   *int64
+	Restart     string
 }
 
 // Spec is the Engine API create body.
@@ -64,6 +65,10 @@ func BuildSpec(in SpecInput) (Spec, error) {
 		host.Memory = *in.MemoryMiB * 1024 * 1024
 	}
 
+	bind, err := bindAddr(in.BindAddress)
+	if err != nil {
+		return Spec{}, err
+	}
 	if len(in.Ports) > 0 {
 		host.PortBindings = network.PortMap{}
 		cfg.ExposedPorts = network.PortSet{}
@@ -81,7 +86,7 @@ func BuildSpec(in SpecInput) (Spec, error) {
 			}
 			cfg.ExposedPorts[port] = struct{}{}
 			host.PortBindings[port] = []network.PortBinding{{
-				HostIP:   netip.MustParseAddr("0.0.0.0"),
+				HostIP:   bind,
 				HostPort: hostPort,
 			}}
 		}
@@ -101,11 +106,25 @@ func BuildSpec(in SpecInput) (Spec, error) {
 			if containerPath == "" || !path.IsAbs(containerPath) {
 				return Spec{}, fmt.Errorf("volume container path %q must be absolute", containerPath)
 			}
+			if strings.Contains(containerPath, ":") {
+				return Spec{}, fmt.Errorf("volume container path %q must not contain ':'", containerPath)
+			}
 			host.Binds = append(host.Binds, hostPath+":"+containerPath)
 		}
 	}
 
 	return Spec{Config: cfg, HostConfig: host}, nil
+}
+
+func bindAddr(raw string) (netip.Addr, error) {
+	if raw == "" {
+		raw = "127.0.0.1"
+	}
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("bind_address %q must be an IP address", raw)
+	}
+	return addr, nil
 }
 
 func parsePort(raw string) (int, error) {

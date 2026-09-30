@@ -33,17 +33,19 @@ resource "orbstack_machine" "dev" {
 
 ### Required
 
-- `name` (String) Machine name. Renamed in place.
+- `name` (String) Machine name. Renamed in place. Must not start with a hyphen.
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `arch` (String) arm64 or amd64. Omit to use the host architecture.
-- `cloud_init` (String) Inline cloud-init user data.
+- `cloud_init` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Inline cloud-init user data. Not stored in state.
 - `cloud_init_file` (String) Path to a cloud-init user data file.
 - `cpus` (Number) CPU core limit. Unset is unlimited.
 - `default_machine` (Boolean) Use this machine as the orbctl default.
 - `disk_gib` (Number) Disk limit in GiB. Unset is unlimited.
-- `image` (String) Distribution, as distro or distro:version.
+- `image` (String) Distribution, as distro or distro:version. Must not start with a hyphen.
 - `isolate_network` (Boolean) Block the machine from other machines and host IPs.
 - `isolated` (Boolean) Create an isolated machine.
 - `memory_mib` (Number) Memory limit in MiB. Unset is unlimited.

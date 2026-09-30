@@ -11,17 +11,18 @@ import (
 
 // ContainerRequest is the desired container shape.
 type ContainerRequest struct {
-	Name      string
-	Image     string
-	Ports     map[string]string
-	Env       map[string]string
-	Volumes   map[string]string
-	Command   []string
-	Workdir   string
-	CPUs      *float64
-	MemoryMiB *int64
-	Restart   string
-	Running   bool
+	Name        string
+	Image       string
+	Ports       map[string]string
+	Env         map[string]string
+	Volumes     map[string]string
+	Command     []string
+	Workdir     string
+	CPUs        *float64
+	MemoryMiB   *int64
+	Restart     string
+	Running     bool
+	BindAddress string
 }
 
 // CreateContainer pulls the image, creates the container, and starts it when requested.
@@ -31,18 +32,22 @@ func (c *Client) CreateContainer(ctx context.Context, req ContainerRequest) (Con
 		return Container{}, err
 	}
 	if err := c.Pull(ctx, req.Image); err != nil {
-		return Container{}, err
+		return Container{}, redactEnv(err, req.Env)
 	}
 	id, err := c.Create(ctx, req.Name, spec)
 	if err != nil {
-		return Container{}, err
+		return Container{}, redactEnv(err, req.Env)
 	}
 	if req.Running {
 		if err := c.Start(ctx, id); err != nil {
-			return Container{}, err
+			return Container{}, redactEnv(err, req.Env)
 		}
 	}
-	return c.Inspect(ctx, id)
+	created, err := c.Inspect(ctx, id)
+	if err != nil {
+		return Container{}, redactEnv(err, req.Env)
+	}
+	return created, nil
 }
 
 // FindContainer inspects by id, then by name.
@@ -101,15 +106,16 @@ func specInput(req ContainerRequest) SpecInput {
 		restart = "unless-stopped"
 	}
 	return SpecInput{
-		Image:     req.Image,
-		Ports:     req.Ports,
-		Env:       req.Env,
-		Volumes:   req.Volumes,
-		Command:   req.Command,
-		Workdir:   req.Workdir,
-		CPUs:      req.CPUs,
-		MemoryMiB: req.MemoryMiB,
-		Restart:   restart,
+		Image:       req.Image,
+		BindAddress: req.BindAddress,
+		Ports:       req.Ports,
+		Env:         req.Env,
+		Volumes:     req.Volumes,
+		Command:     req.Command,
+		Workdir:     req.Workdir,
+		CPUs:        req.CPUs,
+		MemoryMiB:   req.MemoryMiB,
+		Restart:     restart,
 	}
 }
 
@@ -132,4 +138,22 @@ func ResolveHost(ctx context.Context, configured string) string {
 		return "unix://" + filepath.Join(".orbstack", "run", "docker.sock")
 	}
 	return "unix://" + filepath.Join(home, ".orbstack", "run", "docker.sock")
+}
+
+func redactEnv(err error, env map[string]string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	redacted := msg
+	for _, value := range env {
+		if value == "" {
+			continue
+		}
+		redacted = strings.ReplaceAll(redacted, value, "[redacted]")
+	}
+	if redacted == msg {
+		return err
+	}
+	return errors.New(redacted)
 }

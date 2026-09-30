@@ -3,6 +3,8 @@ package provider
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -26,7 +28,10 @@ var (
 	_ resource.ResourceWithConfigure      = &machineResource{}
 	_ resource.ResourceWithImportState    = &machineResource{}
 	_ resource.ResourceWithValidateConfig = &machineResource{}
+	_ resource.ResourceWithModifyPlan     = &machineResource{}
 )
+
+var notAFlag = regexp.MustCompile(`^[^-]`)
 
 func newMachineResource() resource.Resource { return &machineResource{} }
 
@@ -73,14 +78,18 @@ func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Machine name. Renamed in place.",
-				Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
+				Description: "Machine name. Renamed in place. Must not start with a hyphen.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.RegexMatches(notAFlag, "must not start with '-'"),
+				},
 			},
 			"image": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("ubuntu"),
-				Description: "Distribution, as distro or distro:version.",
+				Description: "Distribution, as distro or distro:version. Must not start with a hyphen.",
+				Validators:  []validator.String{stringvalidator.RegexMatches(notAFlag, "must not start with '-'")},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -102,12 +111,11 @@ func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"cloud_init": schema.StringAttribute{
 				Optional:    true,
-				Description: "Inline cloud-init user data.",
+				Sensitive:   true,
+				WriteOnly:   true,
+				Description: "Inline cloud-init user data. Not stored in state.",
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("cloud_init_file")),
-				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"cloud_init_file": schema.StringAttribute{
@@ -218,15 +226,26 @@ func (r *machineResource) ValidateConfig(ctx context.Context, req resource.Valid
 		return
 	}
 	if err := orb.ValidateMachine(machineRequest(model, mounts)); err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("mounts"), "invalid machine", err.Error())
+		attr := path.Root("mounts")
+		switch {
+		case strings.HasPrefix(err.Error(), "name "):
+			attr = path.Root("name")
+		case strings.HasPrefix(err.Error(), "image "):
+			attr = path.Root("image")
+		}
+		resp.Diagnostics.AddAttributeError(attr, "invalid machine", err.Error())
 	}
 }
 
 func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan machineModel
+	var plan, config machineModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	if !config.CloudInit.IsUnknown() {
+		plan.CloudInit = config.CloudInit
 	}
 	mounts, diags := listStrings(ctx, plan.Mounts)
 	resp.Diagnostics.Append(diags...)
@@ -239,6 +258,20 @@ func (r *machineResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, machineModelFrom(plan, machine, false))...)
+}
+
+func (r *machineResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		return
+	}
+	var config machineModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() || config.CloudInit.IsUnknown() {
+		return
+	}
+	replace, diags := replaceIfSecretChanged(ctx, req.State.Raw.IsNull(), req.Private, resp.Private, "cloud_init_hash", hashText(stringVal(config.CloudInit)), path.Root("cloud_init"))
+	resp.Diagnostics.Append(diags...)
+	resp.RequiresReplace = append(resp.RequiresReplace, replace...)
 }
 
 func (r *machineResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -353,9 +386,9 @@ func machineModelFrom(prior machineModel, machine orb.Machine, fillIdentity bool
 		}
 		model.Isolated = types.BoolValue(machine.Isolated)
 		model.IsolateNetwork = types.BoolValue(machine.IsolateNetwork)
-		model.CloudInit = types.StringNull()
 		model.CloudInitFile = types.StringNull()
 		model.Mounts = types.ListNull(types.StringType)
 	}
+	model.CloudInit = types.StringNull()
 	return model
 }

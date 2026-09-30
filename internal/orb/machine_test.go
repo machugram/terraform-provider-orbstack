@@ -1,6 +1,7 @@
 package orb
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -104,6 +105,12 @@ func TestValidateMachineMounts(t *testing.T) {
 	}
 	if err := ValidateMachine(MachineRequest{Isolated: true, Mounts: []string{"/tmp:/tmp"}}); err != nil {
 		t.Fatal(err)
+	}
+	if err := ValidateMachine(MachineRequest{Name: "-dev"}); err == nil || !strings.Contains(err.Error(), "must not start") {
+		t.Fatalf("name: %v", err)
+	}
+	if err := ValidateMachine(MachineRequest{Image: "--user"}); err == nil || !strings.Contains(err.Error(), "must not start") {
+		t.Fatalf("image: %v", err)
 	}
 }
 

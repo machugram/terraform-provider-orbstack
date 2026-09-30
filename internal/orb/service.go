@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Machine is an OrbStack Linux machine as reported by orbctl.
@@ -48,8 +49,21 @@ type MachineRequest struct {
 
 // ValidateMachine checks request rules that orbctl would otherwise reject later.
 func ValidateMachine(req MachineRequest) error {
+	if err := rejectFlag("name", req.Name); err != nil {
+		return err
+	}
+	if err := rejectFlag("image", req.Image); err != nil {
+		return err
+	}
 	if len(req.Mounts) > 0 && !req.Isolated {
 		return errors.New("mounts require isolated")
+	}
+	return nil
+}
+
+func rejectFlag(label, value string) error {
+	if strings.HasPrefix(value, "-") {
+		return fmt.Errorf("%s %q must not start with '-'", label, value)
 	}
 	return nil
 }
@@ -116,6 +130,9 @@ func (c *Client) GetMachine(ctx context.Context, name, id string) (Machine, erro
 
 // UpdateMachine renames, updates limits, power, and the default flag.
 func (c *Client) UpdateMachine(ctx context.Context, currentName string, desired MachineRequest) (Machine, error) {
+	if err := ValidateMachine(desired); err != nil {
+		return Machine{}, err
+	}
 	name := currentName
 	if desired.Name != "" && desired.Name != name {
 		if err := c.Rename(ctx, name, desired.Name); err != nil {

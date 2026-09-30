@@ -33,11 +33,14 @@ resource "orbstack_container" "web" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `bind_address` (String) IP address published ports bind to. Defaults to 127.0.0.1. Use 0.0.0.0 to listen on all interfaces.
 - `command` (List of String) Command. Omit to keep the image command.
 - `cpus` (Number) CPU limit.
-- `env` (Map of String) Environment variables. Empty and null are the same.
+- `env` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Environment variables. Not stored in state. Empty and null are the same.
 - `memory_mib` (Number) Memory limit in MiB.
-- `ports` (Map of String) Host port to container port. TCP, published on 0.0.0.0.
+- `ports` (Map of String) Host port to container port. TCP, published on bind_address.
 - `restart` (String) Restart policy: no, on-failure, always, or unless-stopped.
 - `running` (Boolean) Start the container. Stop uses a 10 second timeout.
 - `volumes` (Map of String) Host path to container path. Bind mounts, read-write.

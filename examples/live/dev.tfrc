@@ -1,0 +1,6 @@
+provider_installation {
+  dev_overrides {
+    "machugram/orbstack" = "/Users/rexfordmachu/Documents/eu/terraform-provider-orbstack/dist"
+  }
+  direct {}
+}

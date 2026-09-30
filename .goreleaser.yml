@@ -5,7 +5,8 @@ before:
   hooks:
     - go mod tidy
 builds:
-  - env:
+  - main: ./cmd/terraform-provider-orbstack
+    env:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:

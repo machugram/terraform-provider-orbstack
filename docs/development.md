@@ -18,7 +18,7 @@ No test starts OrbStack, pulls an image, or opens the Docker socket. That split 
 Build a binary and point Terraform at its directory. The dev override replaces the provider for every configuration on this machine until you remove it.
 
 ```bash
-go build -o "$PWD/dist/terraform-provider-orbstack" ./cmd/terraform-provider-orbstack
+go build -o "$PWD/dist/terraform-provider-orbstack" .
 ```
 
 `~/.terraformrc`:
@@ -39,6 +39,16 @@ terraform plan
 ```
 
 `terraform init` is not required while a dev override is set. Terraform will say the override is in effect.
+
+## Registry docs
+
+`tfplugindocs` writes the pages the Terraform Registry renders. It reads schema descriptions and the files under `examples/provider`, `examples/resources`, and `examples/data-sources`.
+
+```bash
+go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.24.0 generate --provider-name orbstack
+```
+
+Commit `docs/index.md`, `docs/resources/`, and `docs/data-sources/`, then tag a release. The registry reads those files from the release tag.
 
 Do not point experiments at machines you care about. `delete` removes the named machine. Container delete removes that container only.
 

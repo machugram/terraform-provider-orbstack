@@ -25,7 +25,7 @@ resource "orbstack_container" "web" {
 Terraform talks only to the provider plugin. The provider turns a plan into a request struct and calls a client. It does not build `orbctl` arguments or call the Docker API.
 
 ```text
-cmd/terraform-provider-orbstack   plugin entrypoint
+main.go                           plugin entrypoint
 internal/provider                 schema, plan, state
 internal/orb                      orbctl: machines, limits, cloud-init
 internal/docker                   Docker Engine: pull, create, inspect
@@ -125,7 +125,7 @@ More detail is in [docs/architecture.md](docs/architecture.md) and [docs/usage.m
 
 ```bash
 go test ./...
-go build -o terraform-provider-orbstack ./cmd/terraform-provider-orbstack
+go build -o terraform-provider-orbstack .
 ```
 
 `go test` does not create machines or pull images. To point a real configuration at a local binary, see [docs/development.md](docs/development.md).

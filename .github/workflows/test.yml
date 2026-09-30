@@ -21,4 +21,4 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go test ./...
-      - run: go build -o /dev/null ./cmd/terraform-provider-orbstack
+      - run: go build -o /dev/null .

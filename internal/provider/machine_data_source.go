@@ -48,11 +48,11 @@ func (d *machineDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				Computed:    true,
 				Description: "Machine ULID. Set this or name.",
 			},
-			"state":           schema.StringAttribute{Computed: true},
-			"distro":          schema.StringAttribute{Computed: true},
-			"version":         schema.StringAttribute{Computed: true},
-			"arch":            schema.StringAttribute{Computed: true},
-			"disk_size_bytes": schema.Int64Attribute{Computed: true},
+			"state":           schema.StringAttribute{Computed: true, Description: "State reported by orbctl."},
+			"distro":          schema.StringAttribute{Computed: true, Description: "Distribution reported by orbctl."},
+			"version":         schema.StringAttribute{Computed: true, Description: "Distribution version reported by orbctl."},
+			"arch":            schema.StringAttribute{Computed: true, Description: "Machine architecture."},
+			"disk_size_bytes": schema.Int64Attribute{Computed: true, Description: "Disk usage in bytes reported by orbctl info."},
 		},
 	}
 }

@@ -43,6 +43,7 @@ func (p *orbstackProvider) Metadata(_ context.Context, _ provider.MetadataReques
 
 func (p *orbstackProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Description: "Manage OrbStack Linux machines and Docker containers on macOS. Machines are created with orbctl. Containers are created on the OrbStack Docker engine, and create pulls the image.",
 		Attributes: map[string]schema.Attribute{
 			"orb_path": schema.StringAttribute{
 				Optional:    true,

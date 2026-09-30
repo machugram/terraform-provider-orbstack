@@ -182,10 +182,12 @@ func (r *machineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "State reported by orbctl.",
 			},
 			"distro": schema.StringAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Distribution reported by orbctl.",
 			},
 			"version": schema.StringAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Distribution version reported by orbctl.",
 			},
 			"disk_size_bytes": schema.Int64Attribute{
 				Computed:    true,

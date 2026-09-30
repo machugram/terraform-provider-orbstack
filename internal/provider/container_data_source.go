@@ -36,11 +36,11 @@ func (d *containerDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = schema.Schema{
 		Description: "Read one OrbStack container by name.",
 		Attributes: map[string]schema.Attribute{
-			"name":     schema.StringAttribute{Required: true},
-			"id":       schema.StringAttribute{Computed: true},
-			"image":    schema.StringAttribute{Computed: true},
-			"image_id": schema.StringAttribute{Computed: true},
-			"running":  schema.BoolAttribute{Computed: true},
+			"name":     schema.StringAttribute{Required: true, Description: "Container name."},
+			"id":       schema.StringAttribute{Computed: true, Description: "Container id."},
+			"image":    schema.StringAttribute{Computed: true, Description: "Image reference from inspect."},
+			"image_id": schema.StringAttribute{Computed: true, Description: "Image id from inspect."},
+			"running":  schema.BoolAttribute{Computed: true, Description: "Whether the container is running."},
 		},
 	}
 }

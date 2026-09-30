@@ -47,15 +47,16 @@ func (d *machinesDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 				Description: "When true, list only running machines.",
 			},
 			"machines": schema.ListNestedAttribute{
-				Computed: true,
+				Computed:    true,
+				Description: "Machines reported by orbctl list.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"id":      schema.StringAttribute{Computed: true},
-						"name":    schema.StringAttribute{Computed: true},
-						"distro":  schema.StringAttribute{Computed: true},
-						"version": schema.StringAttribute{Computed: true},
-						"arch":    schema.StringAttribute{Computed: true},
-						"state":   schema.StringAttribute{Computed: true},
+						"id":      schema.StringAttribute{Computed: true, Description: "Machine ULID."},
+						"name":    schema.StringAttribute{Computed: true, Description: "Machine name."},
+						"distro":  schema.StringAttribute{Computed: true, Description: "Distribution reported by orbctl."},
+						"version": schema.StringAttribute{Computed: true, Description: "Distribution version reported by orbctl."},
+						"arch":    schema.StringAttribute{Computed: true, Description: "Machine architecture."},
+						"state":   schema.StringAttribute{Computed: true, Description: "State reported by orbctl."},
 					},
 				},
 			},

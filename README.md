@@ -118,7 +118,7 @@ More detail is in [docs/architecture.md](docs/architecture.md) and [docs/usage.m
 
 - macOS
 - [OrbStack](https://orbstack.dev) with `orbctl` on `PATH`
-- Terraform 1.6 or newer
+- Terraform 1.11 or newer (`cloud_init` and `env` are write-only)
 - Go 1.25 or newer, to build the provider
 
 ## Build and test

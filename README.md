@@ -140,3 +140,7 @@ In this pass:
 Intentionally absent: Kubernetes, Compose, image builds, custom networks, healthchecks, registry auth, USB and serial devices, and file copy onto a machine. OrbStack's `push` command has no delete, so a file resource would be a poor fit for Terraform.
 
 The provider address is `registry.terraform.io/machugram/orbstack`. A `v*` tag pushes a signed GitHub release. Publishing that release on the Terraform Registry still requires the signing key on the `machugram` namespace. Local development uses a dev override, described in [docs/development.md](docs/development.md).
+
+## License
+
+[MIT License](LICENSE).
